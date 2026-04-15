@@ -152,13 +152,14 @@ function createApiApp(pool) {
   });
 
   app.put('/api/v1/proxies/nodes/:id', (req, res) => {
-    const node = db.getAll('proxy_nodes').find(n => n.id === req.params.id);
-    if (!node) return res.status(404).json({ detail: "Node not found" });
-    const { flagged, favorite } = req.body || {};
-    if (flagged !== undefined) node.flagged = flagged;
-    if (favorite !== undefined) node.favorite = favorite;
-    db.write();
-    return res.json({ status: 'ok', node });
+    try {
+      const { flagged, favorite } = req.body || {};
+      const node = db.updateProxyNodeMeta(req.params.id, { flagged, favorite });
+      return res.json({ status: 'ok', node });
+    } catch (err) {
+      if (err.message === 'Node not found') return res.status(404).json({ detail: err.message });
+      return res.status(400).json({ detail: err.message });
+    }
   });
 
   app.get('/api/v1/proxies/nodes', (req, res) => {

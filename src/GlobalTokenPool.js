@@ -149,7 +149,7 @@ class GlobalTokenPool {
     } finally {
       worker.isFetching = false;
       if (!worker.isShuttingDown) {
-        worker.ready = false; 
+        worker.ready = false;
         console.log(`\x1b[33m[Pool]\x1b[0m ♻️ 任务结束，强制重置：销毁 Node-${worker.nodeId} 并生成全新指纹...`);
         worker._handleRestart().catch(() => { });
         this._wakeupIdles();

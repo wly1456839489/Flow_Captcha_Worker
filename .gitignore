@@ -17,6 +17,9 @@ pids
 *.pid.lock
 data.json
 data.sqlite
+data.sqlite-shm
+data.sqlite-wal
+data.sqlite-journal
 nodes.json
 bin/
 puppeteer_core/
