@@ -32,13 +32,87 @@ function createApiApp(pool) {
     return res.json(status);
   });
 
-  function authMiddleware(req, res, next) {
+  const jwt = require('jsonwebtoken');
+  // Define JWT Secret (ideally from env, fallback to API_KEY)
+  const JWT_SECRET = API_KEY || 'default_jwt_secret_mengko';
+  const db = require('./db');
+
+  function adminAuthMiddleware(req, res, next) {
+    const path = req.path;
+    
+    // API Key specific routes (Solver logic)
+    const isSolverRoute = path.match(/^\/(api\/v1\/)?(solve|prefill|sessions)/);
+    if (isSolverRoute) {
+       const auth = req.headers.authorization || '';
+       const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+       try {
+          db.verifyAndIncrementApiKey(token);
+          req.solverApiKey = token;
+          return next();
+       } catch (err) {
+          return res.status(401).json({ detail: err.message });
+       }
+    }
+
+    if (!path.startsWith('/api/v1/')) return next();
+    
+    // Skip auth for login
+    if (path.startsWith('/api/v1/auth/login')) return next();
+    if (path === '/api/v1/workers/metrics') return next(); // allow open metrics if any
+
+    // Default: Check Admin JWT for Dashboard access
     const auth = req.headers.authorization || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-    if (token === API_KEY || !req.path.startsWith('/api/v1/')) return next();
-    return res.status(401).json({ detail: 'Unauthorized' });
+    // Backward compatibility for existing hardcoded secret (useful during transition)
+    if (token === API_KEY) return next();
+
+    try {
+      jwt.verify(token, JWT_SECRET);
+      return next();
+    } catch(e) {
+      return res.status(401).json({ detail: 'Unauthorized Admin Session' });
+    }
   }
-  app.use(authMiddleware);
+  
+  app.use(adminAuthMiddleware);
+
+  // --- Auth & Admin Routes ---
+  app.post('/api/v1/auth/login', (req, res) => {
+    const { username, password } = req.body || {};
+    if (db.verifyAdmin(username, password)) {
+       const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' });
+       return res.json({ token, username });
+    }
+    return res.status(401).json({ detail: 'Invalid credentials' });
+  });
+
+  app.put('/api/v1/auth/password', (req, res) => {
+    const { newPassword } = req.body || {};
+    if (!newPassword || newPassword.length < 5) return res.status(400).json({ detail: 'Password must be at least 5 characters' });
+    db.updateAdminPassword('admin', newPassword);
+    return res.json({ status: 'ok' });
+  });
+
+  // --- API Key Management Routes ---
+  app.get('/api/v1/api-keys', (req, res) => {
+    return res.json(db.getAllApiKeys());
+  });
+  
+  app.post('/api/v1/api-keys', (req, res) => {
+    const { remark, max_usage, expire_at } = req.body || {};
+    try {
+      const keyObj = db.createApiKey(remark, max_usage || 0, expire_at || null);
+      return res.json(keyObj);
+    } catch (err) {
+      return res.status(500).json({ detail: err.message });
+    }
+  });
+
+  app.delete('/api/v1/api-keys/:key', (req, res) => {
+    db.revokeApiKey(req.params.key);
+    return res.json({ status: 'ok' });
+  });
+
 
   // Dynamic Scale out API
   app.post('/api/v1/cluster/nodes', async (req, res) => {
@@ -67,7 +141,6 @@ function createApiApp(pool) {
 
   // --- Subscriptions API ---
   const { parseClashSub } = require('./proxy_engine/sub_parser');
-  const db = require('./db');
 
   app.get('/api/v1/proxies/subs', (req, res) => {
     return res.json(db.getAll('subscriptions'));
@@ -288,9 +361,9 @@ function createApiApp(pool) {
   const sessions = new Map();
   const tokenLogs = [];
   
-  const addTokenLog = (type, sessionId, nodeId, message) => {
+  const addTokenLog = (type, sessionId, nodeId, message, ip = '', apiKey = '') => {
      const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
-     tokenLogs.unshift({ id: crypto.randomUUID(), time: timeStr, type, sessionId, nodeId, message });
+     tokenLogs.unshift({ id: crypto.randomUUID(), time: timeStr, type, sessionId, nodeId, message, ip, apiKey });
      if (tokenLogs.length > 200) tokenLogs.pop();
   };
 
@@ -309,8 +382,9 @@ function createApiApp(pool) {
         return;
       }
 
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
       const sessionId = crypto.randomUUID();
-      sessions.set(sessionId, { projectId: project_id, nodeId: entry.nodeId });
+      sessions.set(sessionId, { projectId: project_id, nodeId: entry.nodeId, ip: clientIp, apiKey: req.solverApiKey || '' });
       setTimeout(() => sessions.delete(sessionId), 300000); // clear session after 5 min
 
       let successRate = 'N/A';
@@ -321,7 +395,7 @@ function createApiApp(pool) {
       }
 
       console.log(`\x1b[36m[Node-${entry.nodeId} ${successRate}]\x1b[0m\x1b[35m[F2A-Solve]\x1b[0m \x1b[32m✅ session=${sessionId.substring(0, 8)}... token=[${entry.token.substring(0, 25)}...]\x1b[0m`);
-      addTokenLog('DISPATCH', sessionId.substring(0,8), entry.nodeId, `发放成功 (节点通过率 ${successRate})`);
+      addTokenLog('DISPATCH', sessionId.substring(0,8), entry.nodeId, `发放成功 (节点通过率 ${successRate})`, clientIp, req.solverApiKey || '');
       return res.json({ token: entry.token, session_id: sessionId, fingerprint: { user_agent: entry.userAgent } });
     } catch (err) {
       return res.status(500).json({ detail: err.message });
@@ -342,7 +416,7 @@ function createApiApp(pool) {
       sess.resolved = true;
       pool.reportError(sess.nodeId, sess.projectId);
       console.log(`\x1b[31m[F2A-Error]\x1b[0m session=${sessionId.substring(0, 8)}... reason=${reason}`);
-      addTokenLog('ERROR', sessionId.substring(0,8), sess.nodeId, `验证失败: ${reason}`);
+      addTokenLog('ERROR', sessionId.substring(0,8), sess.nodeId, `验证失败: ${reason}`, sess.ip, sess.apiKey);
     }
 
     return res.json({ status: 'ok' });
@@ -356,7 +430,7 @@ function createApiApp(pool) {
       sess.resolved = true;
       pool.reportSuccess(sess.nodeId);
       console.log(`\x1b[32m[F2A-Finish]\x1b[0m session=${sessionId.substring(0, 8)}... ✅`);
-      addTokenLog('SUCCESS', sessionId.substring(0,8), sess.nodeId, '验证通过 (Success)');
+      addTokenLog('SUCCESS', sessionId.substring(0,8), sess.nodeId, '验证通过 (Success)', sess.ip, sess.apiKey);
     }
 
     return res.json({ status: 'ok' });
@@ -366,7 +440,13 @@ function createApiApp(pool) {
   app.post('/solve', async (req, res) => {
     const { action = "IMAGE_GENERATION" } = req.body || {};
     try {
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
       const entry = await pool.getToken(120000, action);
+      const sessionId = crypto.randomUUID();
+      sessions.set(sessionId, { projectId: null, nodeId: entry.nodeId, ip: clientIp, apiKey: req.solverApiKey || '' });
+      setTimeout(() => sessions.delete(sessionId), 300000); // clear session after 5 min
+      
+      addTokenLog('DISPATCH', sessionId.substring(0,8), entry.nodeId, `旧版协议发放成功 (action=${action})`, clientIp, req.solverApiKey || '');
       return res.json({ success: true, token: entry.token, userAgent: entry.userAgent });
     } catch (err) {
       return res.status(500).json({ error: err.message });

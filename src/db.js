@@ -74,7 +74,29 @@ class SQLiteDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_proxy_nodes_sub_id ON proxy_nodes(sub_id);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS api_keys (
+        key TEXT PRIMARY KEY,
+        remark TEXT NOT NULL DEFAULT '',
+        max_usage INTEGER DEFAULT 0,
+        used_count INTEGER DEFAULT 0,
+        expire_at TEXT,
+        created_at TEXT NOT NULL
+      );
     `);
+
+    const count = this.db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+    if (count === 0) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = crypto.pbkdf2Sync('admin', salt, 50000, 64, 'sha512').toString('hex');
+      this.db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('admin', `${salt}:${hash}`);
+    }
   }
 
   _hasAnyData() {
@@ -350,6 +372,48 @@ class SQLiteDatabase {
 
   write() {
     // Kept for compatibility with existing call sites.
+  }
+
+  // --- Auth & API Key Methods ---
+  verifyAdmin(username, password) {
+    const user = this.db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    if (!user) return false;
+    const [salt, hash] = user.password_hash.split(':');
+    const attempt = crypto.pbkdf2Sync(password, salt, 50000, 64, 'sha512').toString('hex');
+    return attempt === hash;
+  }
+
+  updateAdminPassword(username, newPassword) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(newPassword, salt, 50000, 64, 'sha512').toString('hex');
+    this.db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(`${salt}:${hash}`, username);
+  }
+
+  createApiKey(remark = '', max_usage = 0, expire_at = null) {
+    const key = 'sk-' + crypto.randomBytes(24).toString('hex');
+    this.db.prepare(`
+      INSERT INTO api_keys (key, remark, max_usage, used_count, expire_at, created_at)
+      VALUES (?, ?, ?, 0, ?, ?)
+    `).run(key, remark, max_usage, expire_at, new Date().toISOString());
+    return { key, remark, max_usage, expire_at };
+  }
+
+  getAllApiKeys() {
+    return this.db.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all();
+  }
+
+  revokeApiKey(key) {
+    this.db.prepare('DELETE FROM api_keys WHERE key = ?').run(key);
+  }
+
+  verifyAndIncrementApiKey(key) {
+    const row = this.db.prepare('SELECT * FROM api_keys WHERE key = ?').get(key);
+    if (!row) throw new Error('Invalid API Key');
+    if (row.expire_at && new Date(row.expire_at) < new Date()) throw new Error('API Key expired');
+    if (row.max_usage > 0 && row.used_count >= row.max_usage) throw new Error('API Key usage limit exceeded');
+    
+    this.db.prepare('UPDATE api_keys SET used_count = used_count + 1 WHERE key = ?').run(key);
+    return true;
   }
 }
 
