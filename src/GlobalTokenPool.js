@@ -145,12 +145,18 @@ class GlobalTokenPool {
       console.log(`\x1b[36m[Pool]\x1b[0m ⚡ 实时调度生成 Token 并成功下发 (action=${targetAction})`);
       waiter.resolve(entry);
     } catch (e) {
-      this.waitQueue.unshift(waiter);
+      waiter.retries = (waiter.retries || 0) + 1;
+      if (waiter.retries > 3) {
+        console.log(`\x1b[31m[Pool]\x1b[0m ❌ 任务死循环防护拦截！重试越界(${waiter.retries}次)，丢弃该打码请求。`);
+        waiter.reject(new Error("Token generation max retries exceeded! (" + e.message + ")"));
+      } else {
+        this.waitQueue.unshift(waiter);
+      }
     } finally {
       worker.isFetching = false;
       if (!worker.isShuttingDown) {
         worker.ready = false;
-        console.log(`\x1b[33m[Pool]\x1b[0m ♻️ 任务结束，强制重置：销毁 Node-${worker.nodeId} 并生成全新指纹...`);
+        console.log(`\x1b[33m[Pool]\x1b[0m ♻️ 任务结束，单次使用要求：强制销毁 Node-${worker.nodeId} 并生成全新指纹重启...`);
         worker._handleRestart().catch(() => { });
         this._wakeupIdles();
       }
@@ -169,6 +175,7 @@ class GlobalTokenPool {
       this.waitQueue.push({
         action,
         projectId,
+        retries: 0,
         resolve: (entry) => { clearTimeout(timer); resolve(entry); },
         reject: (err) => { clearTimeout(timer); reject(err); }
       });
