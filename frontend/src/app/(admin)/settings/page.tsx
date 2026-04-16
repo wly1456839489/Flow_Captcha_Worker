@@ -33,7 +33,7 @@ export default function SettingsPage() {
     }
     setUpdatingPassword(true);
     try {
-      const res = await fetch("/api/v1/auth/password", {
+      const res = await fetch("/worker-api/auth/password", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

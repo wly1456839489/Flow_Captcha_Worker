@@ -38,7 +38,7 @@ export default function ApiKeysPage() {
 
   const fetchKeys = async () => {
     try {
-      const res = await fetch("/api/v1/api-keys", {
+      const res = await fetch("/worker-api/api-keys", {
         headers: { "Authorization": `Bearer ${localStorage.getItem("admin_token")}` }
       });
       if (!res.ok) {
@@ -60,7 +60,7 @@ export default function ApiKeysPage() {
 
   const handleCreate = async () => {
     try {
-      const res = await fetch("/api/v1/api-keys", {
+      const res = await fetch("/worker-api/api-keys", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,7 +90,7 @@ export default function ApiKeysPage() {
   const handleRevoke = async (key: string) => {
     if (!confirm("确定要废除该密钥吗？废除后相关业务将立即断开！")) return;
     try {
-      const res = await fetch(`/api/v1/api-keys/${key}`, {
+      const res = await fetch(`/worker-api/api-keys/${key}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${localStorage.getItem("admin_token")}` }
       });
