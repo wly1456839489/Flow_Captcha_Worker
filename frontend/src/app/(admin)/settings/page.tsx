@@ -8,6 +8,13 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
+type DownloadProgress = {
+  stage: string;
+  percent: number;
+  mbDownloaded: string;
+  mbTotal: string;
+};
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("basic");
   
@@ -70,11 +77,16 @@ export default function SettingsPage() {
     fetchCoreStatus();
   }, []);
 
-  const [dlProgress, setDlProgress] = useState({ stage: 'idle', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+  const [dlProgress, setDlProgress] = useState<DownloadProgress>({
+    stage: 'idle',
+    percent: 0,
+    mbDownloaded: '0.0',
+    mbTotal: '0.0',
+  });
 
   const handleDownloadCore = async () => {
     setDownloading(true);
-    setDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+    setDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
     toast.info("开始自动化核心部署...", { id: 'core-download' });
     
     const poller = setInterval(async () => {
@@ -110,15 +122,20 @@ export default function SettingsPage() {
     } finally {
       clearInterval(poller);
       setDownloading(false);
-      setDlProgress({ stage: 'idle', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+      setDlProgress({ stage: 'idle', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
     }
   };
 
-  const [geoDlProgress, setGeoDlProgress] = useState({ stage: 'idle', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+  const [geoDlProgress, setGeoDlProgress] = useState<DownloadProgress>({
+    stage: 'idle',
+    percent: 0,
+    mbDownloaded: '0.0',
+    mbTotal: '0.0',
+  });
 
   const handleDownloadGeo = async () => {
     setGeoDownloading(true);
-    setGeoDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+    setGeoDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
     toast.info("开始更新 GeoIP 数据库...", { id: 'geo-download' });
     
     const poller = setInterval(async () => {
@@ -145,7 +162,7 @@ export default function SettingsPage() {
     } finally {
       clearInterval(poller);
       setGeoDownloading(false);
-      setGeoDlProgress({ stage: 'idle', percent: 0, mbDownloaded: 0, mbTotal: 0 });
+      setGeoDlProgress({ stage: 'idle', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
     }
   };
 
