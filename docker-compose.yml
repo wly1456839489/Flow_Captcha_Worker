@@ -1,0 +1,14 @@
+services:
+  flow-captcha-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flow-captcha-worker
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9060:9060"
+    environment:
+      - DB_PATH=/data/data.sqlite
+    volumes:
+      - ./docker-data:/data
