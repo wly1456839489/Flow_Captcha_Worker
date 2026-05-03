@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const yaml = require('js-yaml');
 
 const BIN_DIR = path.join(__dirname, '..', '..', 'bin');
-const MIHOMO_VERSION = 'v1.18.9';
+const MIHOMO_VERSION = 'v1.19.23';
 
 let downloadState = {
   isDownloading: false,
@@ -29,7 +29,7 @@ function getGeoDownloadState() { return geoDownloadState; }
 function getMihomoBinaryPath() {
   const platform = os.platform();
   const ext = platform === 'win32' ? '.exe' : '';
-  return path.join(BIN_DIR, `mihomo${ext}`);
+  return path.join(BIN_DIR, `mihomo-${MIHOMO_VERSION}${ext}`);
 }
 
 function getDownloadUrl() {

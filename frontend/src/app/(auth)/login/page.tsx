@@ -20,7 +20,8 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("/worker-api/auth/login", {
+      // POST mapping for api routes handles through next.config.ts /api/* proxy logic
+      const res = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })

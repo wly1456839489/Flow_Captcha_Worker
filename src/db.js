@@ -3,9 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const sqlitePath = process.env.DB_PATH
-  ? path.resolve(process.env.DB_PATH)
-  : path.join(__dirname, '..', 'data.sqlite');
+const sqlitePath = path.join(__dirname, '..', 'data.sqlite');
 const legacyJsonPath = path.join(__dirname, '..', 'data.json');
 const legacyNodesPath = path.join(__dirname, '..', 'nodes.json');
 
@@ -24,11 +22,6 @@ function toJson(value, fallback) {
 
 class SQLiteDatabase {
   constructor() {
-    const sqliteDir = path.dirname(sqlitePath);
-    if (!fs.existsSync(sqliteDir)) {
-      fs.mkdirSync(sqliteDir, { recursive: true });
-    }
-
     this.db = new DatabaseSync(sqlitePath);
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA foreign_keys = ON');

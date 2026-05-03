@@ -15,6 +15,13 @@ type DownloadProgress = {
   mbTotal: string;
 };
 
+const initialDownloadProgress: DownloadProgress = {
+  stage: 'idle',
+  percent: 0,
+  mbDownloaded: '0.0',
+  mbTotal: '0.0',
+};
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("basic");
   
@@ -33,7 +40,7 @@ export default function SettingsPage() {
     }
     setUpdatingPassword(true);
     try {
-      const res = await fetch("/worker-api/auth/password", {
+      const res = await fetch("/api/v1/auth/password", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -77,16 +84,11 @@ export default function SettingsPage() {
     fetchCoreStatus();
   }, []);
 
-  const [dlProgress, setDlProgress] = useState<DownloadProgress>({
-    stage: 'idle',
-    percent: 0,
-    mbDownloaded: '0.0',
-    mbTotal: '0.0',
-  });
+  const [dlProgress, setDlProgress] = useState<DownloadProgress>(initialDownloadProgress);
 
   const handleDownloadCore = async () => {
     setDownloading(true);
-    setDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
+    setDlProgress({ ...initialDownloadProgress, stage: 'downloading' });
     toast.info("开始自动化核心部署...", { id: 'core-download' });
     
     const poller = setInterval(async () => {
@@ -122,20 +124,15 @@ export default function SettingsPage() {
     } finally {
       clearInterval(poller);
       setDownloading(false);
-      setDlProgress({ stage: 'idle', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
+      setDlProgress(initialDownloadProgress);
     }
   };
 
-  const [geoDlProgress, setGeoDlProgress] = useState<DownloadProgress>({
-    stage: 'idle',
-    percent: 0,
-    mbDownloaded: '0.0',
-    mbTotal: '0.0',
-  });
+  const [geoDlProgress, setGeoDlProgress] = useState<DownloadProgress>(initialDownloadProgress);
 
   const handleDownloadGeo = async () => {
     setGeoDownloading(true);
-    setGeoDlProgress({ stage: 'downloading', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
+    setGeoDlProgress({ ...initialDownloadProgress, stage: 'downloading' });
     toast.info("开始更新 GeoIP 数据库...", { id: 'geo-download' });
     
     const poller = setInterval(async () => {
@@ -162,7 +159,7 @@ export default function SettingsPage() {
     } finally {
       clearInterval(poller);
       setGeoDownloading(false);
-      setGeoDlProgress({ stage: 'idle', percent: 0, mbDownloaded: '0.0', mbTotal: '0.0' });
+      setGeoDlProgress(initialDownloadProgress);
     }
   };
 

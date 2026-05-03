@@ -62,6 +62,7 @@ export default function ProxyNodesPage() {
       
       const newSub = await res.json();
       toast.success("订阅添加入库成功...");
+      setSelectedSubId(newSub.id);
       setIsAddOpen(false);
       setNewSubUrl("");
       setNewSubRemark("");
@@ -212,10 +213,10 @@ export default function ProxyNodesPage() {
 
   // Auto-select first sub if available and none selected
   useEffect(() => {
-    if (subs.length > 0 && !selectedSubId) {
-      setSelectedSubId(subs[0].id);
-    } else if (subs.length === 0) {
+    if (subs.length === 0) {
       setSelectedSubId(null);
+    } else if (!selectedSubId || !subs.some(sub => sub.id === selectedSubId)) {
+      setSelectedSubId(subs[0].id);
     }
   }, [subs, selectedSubId]);
 
